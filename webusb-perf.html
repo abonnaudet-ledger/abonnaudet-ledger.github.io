@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Ledger USB Perf</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap">
+
+<style>
+/* ── Tokens (same as webusb-tester) ── */
+:root {
+  --bg:       #090C14;
+  --surface:  #111622;
+  --elevated: #181E2E;
+  --border:   #20293C;
+  --border-hi:#2E3A52;
+  --accent:   #4F8AF4;
+  --accent-lo:rgba(79,138,244,.12);
+  --rx:       #2FCA8E;
+  --rx-lo:    rgba(47,202,142,.10);
+  --err:      #EF5350;
+  --err-lo:   rgba(239,83,80,.10);
+  --warn:     #F0A32A;
+  --text:     #C5D0EB;
+  --text-2:   #6B7A9E;
+  --text-3:   #3A4560;
+  --ui:       'IBM Plex Sans', system-ui, sans-serif;
+  --mono:     'JetBrains Mono', 'Fira Code', monospace;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg:#EEF1F8;--surface:#FFFFFF;--elevated:#F4F7FC;--border:#D5DCF0;--border-hi:#B8C4DF;
+    --accent:#2461E8;--accent-lo:rgba(36,97,232,.10);--rx:#0E9966;--rx-lo:rgba(14,153,102,.10);
+    --err:#D43535;--err-lo:rgba(212,53,53,.08);--warn:#C07A10;
+    --text:#1C2440;--text-2:#5A6480;--text-3:#B0BAD4;
+  }
+}
+:root[data-theme="dark"] {
+  --bg:#090C14;--surface:#111622;--elevated:#181E2E;--border:#20293C;--border-hi:#2E3A52;
+  --accent:#4F8AF4;--accent-lo:rgba(79,138,244,.12);--rx:#2FCA8E;--rx-lo:rgba(47,202,142,.10);
+  --err:#EF5350;--err-lo:rgba(239,83,80,.10);--warn:#F0A32A;
+  --text:#C5D0EB;--text-2:#6B7A9E;--text-3:#3A4560;
+}
+:root[data-theme="light"] {
+  --bg:#EEF1F8;--surface:#FFFFFF;--elevated:#F4F7FC;--border:#D5DCF0;--border-hi:#B8C4DF;
+  --accent:#2461E8;--accent-lo:rgba(36,97,232,.10);--rx:#0E9966;--rx-lo:rgba(14,153,102,.10);
+  --err:#D43535;--err-lo:rgba(212,53,53,.08);--warn:#C07A10;
+  --text:#1C2440;--text-2:#5A6480;--text-3:#B0BAD4;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--ui);
+  font-size: 13px;
+  line-height: 1.5;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  gap: 12px;
+  min-height: 100svh;
+}
+
+/* ── Header ── */
+header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.logo-mark {
+  width: 28px; height: 28px;
+  background: var(--accent);
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+
+h1 { font-size: 15px; font-weight: 600; letter-spacing: -.01em; }
+
+.badge {
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--elevated);
+  border: 1px solid var(--border);
+  color: var(--text-2);
+}
+
+.spacer { flex: 1; }
+
+.status-pill {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--text-2);
+  padding: 4px 10px; border-radius: 20px;
+  border: 1px solid var(--border); background: var(--surface);
+}
+
+.dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--text-3); transition: background .3s;
+  flex-shrink: 0;
+}
+.dot.connected { background: var(--rx); box-shadow: 0 0 6px var(--rx); }
+.dot.error     { background: var(--err); }
+
+.btn-icon {
+  width: 30px; height: 30px; border-radius: 6px;
+  border: 1px solid var(--border); background: var(--surface);
+  color: var(--text-2); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: border-color .15s, color .15s; flex-shrink: 0;
+}
+.btn-icon:hover { border-color: var(--border-hi); color: var(--text); }
+
+/* ── Layout ── */
+.main {
+  display: flex; gap: 12px; flex: 1; min-height: 0;
+}
+
+/* ── Panel ── */
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px; overflow: hidden;
+}
+.panel-head {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.panel-title {
+  font-size: 11px; font-weight: 600;
+  letter-spacing: .08em; text-transform: uppercase; color: var(--text-2);
+}
+.panel-body { padding: 12px; }
+
+/* ── Sidebar ── */
+.sidebar {
+  width: 280px; flex-shrink: 0;
+  display: flex; flex-direction: column; gap: 10px;
+}
+
+/* ── Fields ── */
+.field { display: flex; flex-direction: column; gap: 5px; }
+.field label { font-size: 11px; font-weight: 500; color: var(--text-2); }
+
+.num-input {
+  font-family: var(--mono);
+  font-size: 13px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--elevated);
+  color: var(--text);
+  width: 100%;
+  outline: none;
+  transition: border-color .15s;
+  font-variant-numeric: tabular-nums;
+}
+.num-input:focus { border-color: var(--accent); }
+
+.field-hint { font-size: 10px; color: var(--text-2); }
+
+.form-grid { display: flex; flex-direction: column; gap: 10px; }
+
+/* ── Buttons ── */
+.btn {
+  width: 100%; padding: 9px 14px; border-radius: 6px;
+  font-family: var(--ui); font-size: 13px; font-weight: 500;
+  cursor: pointer; border: none;
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  transition: opacity .15s, background .15s;
+}
+.btn:disabled { opacity: .35; cursor: not-allowed; }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover:not(:disabled) { opacity: .85; }
+.btn-run {
+  background: var(--rx); color: #fff;
+  font-size: 14px; font-weight: 600; padding: 11px;
+}
+.btn-run:hover:not(:disabled) { opacity: .85; }
+.btn-run.running { background: var(--err); }
+.btn-danger {
+  background: transparent; color: var(--err);
+  border: 1px solid var(--err);
+}
+.btn-danger:hover:not(:disabled) { background: var(--err); color: #fff; }
+
+/* ── KV list ── */
+.kv-list { display: flex; flex-direction: column; gap: 6px; }
+.kv { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.kv-key { font-size: 11px; color: var(--text-2); flex-shrink: 0; }
+.kv-val { font-family: var(--mono); font-size: 11px; color: var(--text); text-align: right; }
+
+/* ── Right panel ── */
+.right {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; gap: 10px;
+}
+
+/* ── Stat tiles ── */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.stat-tile {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 14px 12px;
+  display: flex; flex-direction: column; gap: 4px;
+  transition: border-color .2s;
+}
+.stat-tile.highlight { border-color: var(--accent); background: var(--accent-lo); }
+.stat-tile.highlight-rx { border-color: var(--rx); background: var(--rx-lo); }
+
+.stat-label {
+  font-size: 10px; font-weight: 600;
+  letter-spacing: .07em; text-transform: uppercase;
+  color: var(--text-2);
+}
+.stat-value {
+  font-family: var(--mono);
+  font-size: 26px; font-weight: 600;
+  color: var(--text);
+  letter-spacing: -.02em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.stat-tile.highlight .stat-value { color: var(--accent); }
+.stat-tile.highlight-rx .stat-value { color: var(--rx); }
+.stat-unit {
+  font-family: var(--mono);
+  font-size: 11px; color: var(--text-2);
+}
+.stat-empty { color: var(--text-3); font-size: 20px; }
+
+/* ── Progress ── */
+.progress-wrap {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+
+.progress-header {
+  display: flex; justify-content: space-between; align-items: baseline;
+}
+
+.progress-label { font-size: 11px; color: var(--text-2); font-weight: 500; }
+.progress-pct {
+  font-family: var(--mono); font-size: 12px; color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.progress-bar-track {
+  height: 6px; border-radius: 3px;
+  background: var(--elevated);
+  overflow: hidden;
+}
+.progress-bar-fill {
+  height: 100%; border-radius: 3px;
+  background: var(--accent);
+  width: 0%;
+  transition: width .1s linear;
+}
+.progress-bar-fill.done { background: var(--rx); }
+.progress-bar-fill.error { background: var(--err); }
+
+.progress-sub {
+  font-family: var(--mono); font-size: 10px; color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Log ── */
+.log-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.log-panel .panel { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+
+.log-body {
+  flex: 1; overflow-y: auto;
+  padding: 8px;
+  display: flex; flex-direction: column; gap: 2px;
+  font-family: var(--mono); font-size: 11px;
+}
+.log-body::-webkit-scrollbar { width: 4px; }
+.log-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.log-row {
+  display: grid;
+  grid-template-columns: 58px 40px 1fr;
+  gap: 6px; align-items: baseline;
+  padding: 3px 6px; border-radius: 3px;
+  border-left: 2px solid transparent;
+}
+.log-row:hover { background: var(--elevated); }
+.log-row.info  { border-left-color: var(--border-hi); }
+.log-row.ok    { border-left-color: var(--rx); }
+.log-row.err   { border-left-color: var(--err); background: var(--err-lo); }
+.log-row.warn  { border-left-color: var(--warn); }
+
+.log-ts  { color: var(--text-3); font-size: 10px; font-variant-numeric: tabular-nums; }
+.log-tag { font-size: 9px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; }
+.info  .log-tag { color: var(--text-2); }
+.ok    .log-tag { color: var(--rx); }
+.err   .log-tag { color: var(--err); }
+.warn  .log-tag { color: var(--warn); }
+.log-msg { color: var(--text); }
+
+/* ── Responsive ── */
+@media (max-width: 700px) {
+  .main { flex-direction: column; }
+  .sidebar { width: 100%; }
+  .stat-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 420px) {
+  .stat-grid { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header>
+  <div class="logo-mark">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <path d="M3 8h10M8 3v10" stroke="white" stroke-width="2" stroke-linecap="round"/>
+      <circle cx="8" cy="8" r="2.5" fill="white" opacity=".3"/>
+    </svg>
+  </div>
+  <h1>Ledger USB Perf</h1>
+  <span class="badge">E0 FF 00 00</span>
+  <div class="spacer"></div>
+  <div class="status-pill">
+    <span class="dot" id="statusDot"></span>
+    <span id="statusText">Disconnected</span>
+  </div>
+  <button class="btn-icon" id="themeToggle" aria-label="Theme">
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+      <circle cx="7" cy="7" r="3" stroke="currentColor" stroke-width="1.5"/>
+      <path d="M7 1v1M7 12v1M1 7h1M12 7h1M3.22 3.22l.71.71M10.07 10.07l.71.71M3.22 10.78l.71-.71M10.07 3.93l.71-.71" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>
+  </button>
+</header>
+
+<!-- Main -->
+<div class="main">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+
+    <!-- Device -->
+    <div class="panel">
+      <div class="panel-head">
+        <span class="panel-title">Device</span>
+        <button class="btn btn-danger" id="disconnectBtn" style="display:none;width:auto;padding:3px 10px;font-size:11px">Disconnect</button>
+      </div>
+      <div class="panel-body" id="deviceContent">
+        <div style="text-align:center;padding:12px 0 8px;color:var(--text-2);font-size:12px">
+          No device connected
+        </div>
+        <button class="btn btn-primary" id="connectBtn">
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+            <path d="M3 6.5h7M7 3.5l3 3-3 3" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          Connect
+        </button>
+      </div>
+    </div>
+
+    <!-- Config -->
+    <div class="panel">
+      <div class="panel-head"><span class="panel-title">Parameters</span></div>
+      <div class="panel-body">
+        <div class="form-grid">
+
+          <div class="field">
+            <label for="totalSize">Total data (bytes)</label>
+            <input type="number" class="num-input" id="totalSize" value="25500" min="255" step="255">
+            <span class="field-hint">Default: 100 × 255 = 25,500</span>
+          </div>
+
+          <div class="field">
+            <label for="payloadSize">Max chunk (bytes)</label>
+            <input type="number" class="num-input" id="payloadSize" value="255" min="1" max="255">
+            <span class="field-hint">PAYLOAD_SIZE — max 255</span>
+          </div>
+
+          <div class="field">
+            <label>APDU</label>
+            <div style="font-family:var(--mono);font-size:11px;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--elevated);color:var(--text-2)">
+              <span style="color:var(--warn)">E0</span>
+              <span style="color:var(--accent)"> FF</span>
+              <span style="color:var(--rx)"> 00 00</span>
+              <span> [Lc] [0xA5×N]</span>
+            </div>
+            <span class="field-hint">The running app must handle this INS</span>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- Run -->
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <button class="btn btn-run" id="runBtn" disabled>
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <polygon points="3,2 11,7 3,12" fill="white"/>
+        </svg>
+        Run test
+      </button>
+      <div id="runNote" style="font-size:11px;color:var(--text-2);text-align:center">
+        Connect a device first
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- Right -->
+  <div class="right">
+
+    <!-- Stats -->
+    <div class="stat-grid">
+      <div class="stat-tile" id="tileApduTime">
+        <span class="stat-label">Time / APDU</span>
+        <span class="stat-value stat-empty" id="valApduTime">—</span>
+        <span class="stat-unit">ms</span>
+      </div>
+      <div class="stat-tile" id="tileThroughput">
+        <span class="stat-label">Throughput</span>
+        <span class="stat-value stat-empty" id="valThroughput">—</span>
+        <span class="stat-unit">KB/s</span>
+      </div>
+      <div class="stat-tile" id="tileTransfer">
+        <span class="stat-label">Transfer time</span>
+        <span class="stat-value stat-empty" id="valTransfer">—</span>
+        <span class="stat-unit">s</span>
+      </div>
+      <div class="stat-tile" id="tileApduCount">
+        <span class="stat-label">APDUs sent</span>
+        <span class="stat-value stat-empty" id="valApduCount">—</span>
+        <span class="stat-unit">packets</span>
+      </div>
+      <div class="stat-tile" id="tileBytes">
+        <span class="stat-label">Data bytes</span>
+        <span class="stat-value stat-empty" id="valBytes">—</span>
+        <span class="stat-unit">bytes</span>
+      </div>
+      <div class="stat-tile" id="tileSetup">
+        <span class="stat-label">Setup</span>
+        <span class="stat-value stat-empty" id="valSetup">—</span>
+        <span class="stat-unit">s</span>
+      </div>
+    </div>
+
+    <!-- Progress -->
+    <div class="progress-wrap">
+      <div class="progress-header">
+        <span class="progress-label" id="progressLabel">Waiting</span>
+        <span class="progress-pct" id="progressPct">0%</span>
+      </div>
+      <div class="progress-bar-track">
+        <div class="progress-bar-fill" id="progressFill"></div>
+      </div>
+      <span class="progress-sub" id="progressSub">—</span>
+    </div>
+
+    <!-- Log -->
+    <div class="log-panel">
+      <div class="panel">
+        <div class="panel-head">
+          <span class="panel-title">Log</span>
+          <button class="btn-icon" id="clearBtn" aria-label="Clear">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path d="M1.5 3h9M4.5 3V2h3v1M9.5 3l-.6 7H3.1L2.5 3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </div>
+        <div class="log-body" id="logBody"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ── State ──
+let device = null, iface = null, epIn = null, epOut = null;
+let running = false, abortFlag = false;
+let theme = 'system';
+
+// ── DOM ──
+const connectBtn    = document.getElementById('connectBtn');
+const disconnectBtn = document.getElementById('disconnectBtn');
+const runBtn        = document.getElementById('runBtn');
+const runNote       = document.getElementById('runNote');
+const deviceContent = document.getElementById('deviceContent');
+const statusDot     = document.getElementById('statusDot');
+const statusText    = document.getElementById('statusText');
+const totalSizeEl   = document.getElementById('totalSize');
+const payloadSizeEl = document.getElementById('payloadSize');
+const progressFill  = document.getElementById('progressFill');
+const progressLabel = document.getElementById('progressLabel');
+const progressPct   = document.getElementById('progressPct');
+const progressSub   = document.getElementById('progressSub');
+const logBody       = document.getElementById('logBody');
+
+// ── Theme ──
+document.getElementById('themeToggle').addEventListener('click', () => {
+  const root = document.documentElement;
+  theme = theme === 'system'
+    ? (window.matchMedia('(prefers-color-scheme:dark)').matches ? 'light' : 'dark')
+    : theme === 'dark' ? 'light' : 'dark';
+  root.setAttribute('data-theme', theme);
+});
+
+// ── Log ──
+document.getElementById('clearBtn').addEventListener('click', () => { logBody.innerHTML = ''; });
+
+function log(type, msg) {
+  const now = new Date();
+  const ts = now.toTimeString().slice(0,8) + '.' + String(now.getMilliseconds()).padStart(3,'0');
+  const tags = { info:'INFO', ok:'OK', err:'ERR', warn:'WARN' };
+  const el = document.createElement('div');
+  el.className = `log-row ${type}`;
+  el.innerHTML = `<span class="log-ts">${ts}</span><span class="log-tag">${tags[type]||type}</span><span class="log-msg">${msg}</span>`;
+  logBody.appendChild(el);
+  logBody.scrollTop = logBody.scrollHeight;
+}
+
+// ── Stats ──
+function setStat(id, value, unit, highlight) {
+  const tile = document.getElementById('tile' + id);
+  const val  = document.getElementById('val'  + id);
+  val.textContent = value;
+  val.className = 'stat-value';
+  if (highlight === 'accent') tile.className = 'stat-tile highlight';
+  else if (highlight === 'rx') tile.className = 'stat-tile highlight-rx';
+  else tile.className = 'stat-tile';
+}
+
+function resetStats() {
+  ['ApduTime','Throughput','Transfer','ApduCount','Bytes','Setup'].forEach(id => {
+    const tile = document.getElementById('tile' + id);
+    const val  = document.getElementById('val'  + id);
+    val.textContent = '—';
+    val.className = 'stat-value stat-empty';
+    tile.className = 'stat-tile';
+  });
+}
+
+// ── Progress ──
+function setProgress(pct, label, sub, state) {
+  progressFill.style.width = pct + '%';
+  progressFill.className = 'progress-bar-fill' + (state === 'done' ? ' done' : state === 'error' ? ' error' : '');
+  progressLabel.textContent = label;
+  progressPct.textContent = Math.round(pct) + '%';
+  progressSub.textContent = sub || '—';
+}
+
+// ── WebUSB framing ──
+const CHANNEL = [0x01, 0x01];
+const TAG_APDU = 0x05;
+const PKT = 64;
+
+function frameAPDU(apdu) {
+  const pkts = [];
+  let seq = 0, off = 0;
+  // first packet
+  const p0 = new Uint8Array(PKT);
+  p0[0]=CHANNEL[0]; p0[1]=CHANNEL[1]; p0[2]=TAG_APDU;
+  p0[3]=(seq>>8)&0xFF; p0[4]=seq&0xFF;
+  p0[5]=(apdu.length>>8)&0xFF; p0[6]=apdu.length&0xFF;
+  const c0 = apdu.slice(0, PKT-7); p0.set(c0, 7); off += c0.length; seq++;
+  pkts.push(p0);
+  while (off < apdu.length) {
+    const pN = new Uint8Array(PKT);
+    pN[0]=CHANNEL[0]; pN[1]=CHANNEL[1]; pN[2]=TAG_APDU;
+    pN[3]=(seq>>8)&0xFF; pN[4]=seq&0xFF;
+    const cN = apdu.slice(off, off+PKT-5); pN.set(cN, 5); off += cN.length; seq++;
+    pkts.push(pN);
+  }
+  return pkts;
+}
+
+async function sendAPDU(apdu) {
+  const pkts = frameAPDU(apdu);
+  for (const p of pkts) await device.transferOut(epOut.endpointNumber, p);
+  // receive response
+  const rxPkts = [];
+  let seq = 0, total = null, recv = 0;
+  while (true) {
+    const res = await device.transferIn(epIn.endpointNumber, PKT);
+    if (!res.data || !res.data.byteLength) break;
+    const view = new Uint8Array(res.data.buffer);
+    rxPkts.push(view);
+    if (seq === 0) { total = (view[5]<<8)|view[6]; recv += Math.min(view.length-7, total); }
+    else           { recv += Math.min(view.length-5, total-recv); }
+    seq++;
+    if (total !== null && recv >= total) break;
+  }
+  return rxPkts;
+}
+
+// ── WebUSB connection ──
+function findIface(dev) {
+  for (const ifc of dev.configuration.interfaces) {
+    for (const alt of ifc.alternates) {
+      const i = alt.endpoints.find(e => e.endpointNumber===3 && e.direction==='in');
+      const o = alt.endpoints.find(e => e.endpointNumber===3 && e.direction==='out');
+      if (i && o) return { interfaceNumber: ifc.interfaceNumber, epIn: i, epOut: o };
+    }
+  }
+  return null;
+}
+
+connectBtn.addEventListener('click', async () => {
+  if (!navigator.usb) { log('err','WebUSB not available (Chrome/Edge required, HTTPS or localhost)'); return; }
+  try {
+    log('info','Selecting device…');
+    device = await navigator.usb.requestDevice({ filters: [{ vendorId: 0x2C97 }] });
+    const t0 = performance.now();
+    await device.open();
+    if (!device.configuration) await device.selectConfiguration(1);
+    const info = findIface(device);
+    if (!info) { log('err','WebUSB interface (EP3) not found'); await device.close(); device=null; return; }
+    try { await device.claimInterface(info.interfaceNumber); }
+    catch(e) { log('err',`claimInterface: ${e.message}`); await device.close(); device=null; return; }
+    iface=info; epIn=info.epIn; epOut=info.epOut;
+    const setupMs = performance.now() - t0;
+    statusDot.className='dot connected';
+    statusText.textContent=device.productName||'Connected';
+    runBtn.disabled=false; runNote.textContent='⌘↵ to run';
+    disconnectBtn.style.display='flex';
+    deviceContent.innerHTML=`
+      <div class="kv-list">
+        <div class="kv"><span class="kv-key">Product</span><span class="kv-val">${device.productName||'—'}</span></div>
+        <div class="kv"><span class="kv-key">VID/PID</span><span class="kv-val">0x${device.vendorId.toString(16).padStart(4,'0').toUpperCase()} / 0x${device.productId.toString(16).padStart(4,'0').toUpperCase()}</span></div>
+        <div class="kv"><span class="kv-key">Interface</span><span class="kv-val">#${info.interfaceNumber}</span></div>
+      </div>`;
+    log('ok',`Connected in ${setupMs.toFixed(0)} ms — interface #${info.interfaceNumber}`);
+  } catch(e) {
+    if (e.name!=='NotFoundError') log('err',e.message);
+  }
+});
+
+disconnectBtn.addEventListener('click', async () => {
+  if (!device) return;
+  try { if(iface) await device.releaseInterface(iface.interfaceNumber); await device.close(); } catch(_){}
+  device=null; iface=null;
+  statusDot.className='dot'; statusText.textContent='Disconnected';
+  runBtn.disabled=true; runNote.textContent='Connect a device first';
+  disconnectBtn.style.display='none';
+  deviceContent.innerHTML=`<div style="text-align:center;padding:12px 0 8px;color:var(--text-2);font-size:12px">No device connected</div>
+    <button class="btn btn-primary" id="connectBtn2">Connect</button>`;
+  document.getElementById('connectBtn2').addEventListener('click',()=>connectBtn.click());
+  log('info','Disconnected');
+});
+
+// ── Run ──
+async function run() {
+  if (!device || running) return;
+  running = true; abortFlag = false;
+  resetStats();
+
+  const TOTAL = parseInt(totalSizeEl.value) || 25500;
+  const CHUNK = Math.min(255, parseInt(payloadSizeEl.value) || 255);
+
+  runBtn.className = 'btn btn-run running';
+  runBtn.innerHTML = `<svg width="10" height="10" viewBox="0 0 10 10" fill="none"><rect x="2" y="2" width="6" height="6" fill="white" rx="1"/></svg> Stop`;
+  log('info', `Starting — total: ${TOTAL} bytes, chunk: ${CHUNK} bytes`);
+  setProgress(0, 'Sending…', '0 / ' + TOTAL + ' bytes', '');
+
+  let remaining = TOTAL, cnt = 0, totalBytes = 0, errors = 0;
+  const tStart = performance.now();
+  let lastProgressUpdate = 0;
+
+  while (remaining > 0 && !abortFlag) {
+    const chunkLen = Math.min(CHUNK, remaining);
+    // Build APDU: CLA=E0 INS=FF P1=00 P2=00 Lc=chunkLen data=[0xA5*chunkLen]
+    const apdu = new Uint8Array(5 + chunkLen);
+    apdu[0]=0xE0; apdu[1]=0xFF; apdu[2]=0x00; apdu[3]=0x00; apdu[4]=chunkLen;
+    apdu.fill(0xA5, 5);
+
+    try {
+      await sendAPDU(apdu);
+    } catch(e) {
+      errors++;
+      if (errors <= 3) log('warn', `APDU error #${cnt+1}: ${e.message}`);
+      if (e.name==='NotFoundError'||e.name==='NetworkError') { abortFlag=true; break; }
+    }
+
+    remaining  -= chunkLen;
+    cnt++;
+    totalBytes += 4 + chunkLen; // CLA+INS+P1+P2 + data
+
+    const now = performance.now();
+    if (now - lastProgressUpdate >= 1000) {
+      const done = TOTAL - remaining;
+      const pct  = (done / TOTAL) * 100;
+      const elapsed = (now - tStart) / 1000;
+      const rate = elapsed > 0 ? (totalBytes / 1024 / elapsed).toFixed(1) : '—';
+      setProgress(pct, 'Sending…', `${done.toLocaleString()} / ${TOTAL.toLocaleString()} bytes — ${rate} KB/s`, '');
+      lastProgressUpdate = now;
+    }
+  }
+
+  const tEnd = performance.now();
+  const transferTime = (tEnd - tStart) / 1000;
+
+  if (!abortFlag) {
+    // Results
+    const apduMs     = (transferTime / cnt * 1000);
+    const throughput = totalBytes / 1024 / transferTime;
+
+    setStat('ApduTime',   apduMs.toFixed(2),     'ms',     'accent');
+    setStat('Throughput', throughput.toFixed(1),  'KB/s',   'rx');
+    setStat('Transfer',   transferTime.toFixed(3),'s',      '');
+    setStat('ApduCount',  cnt,                    'packets','');
+    setStat('Bytes',      TOTAL.toLocaleString(), 'bytes',  '');
+    setStat('Setup',      '—',                    's',      '');
+
+    setProgress(100, 'Done', `${cnt} APDUs in ${transferTime.toFixed(3)} s`, 'done');
+    log('ok', `${cnt} APDUs · ${transferTime.toFixed(3)} s · ${apduMs.toFixed(2)} ms/APDU · ${throughput.toFixed(1)} KB/s`);
+    if (errors) log('warn', `${errors} error(s) ignored (app may not support INS=0xFF)`);
+  } else {
+    setProgress(
+      ((TOTAL - remaining) / TOTAL) * 100,
+      'Aborted', `Stopped after ${cnt} APDUs`, 'error'
+    );
+    log('warn', `Test stopped after ${cnt} APDUs`);
+  }
+
+  running = false;
+  runBtn.className = 'btn btn-run';
+  runBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><polygon points="3,2 11,7 3,12" fill="white"/></svg> Run test`;
+}
+
+runBtn.addEventListener('click', () => {
+  if (running) { abortFlag = true; }
+  else { run(); }
+});
+
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey||e.metaKey) && e.key==='Enter' && !runBtn.disabled) {
+    e.preventDefault(); runBtn.click();
+  }
+});
+</script>
+</body>
+</html>
