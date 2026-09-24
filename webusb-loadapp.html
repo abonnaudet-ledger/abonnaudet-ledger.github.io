@@ -1,0 +1,1415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Ledger Load App</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap">
+
+<style>
+:root {
+  --bg:       #090C14;
+  --surface:  #111622;
+  --elevated: #181E2E;
+  --border:   #20293C;
+  --border-hi:#2E3A52;
+  --accent:   #4F8AF4;
+  --accent-lo:rgba(79,138,244,.12);
+  --rx:       #2FCA8E;
+  --rx-lo:    rgba(47,202,142,.10);
+  --err:      #EF5350;
+  --err-lo:   rgba(239,83,80,.10);
+  --warn:     #F0A32A;
+  --text:     #C5D0EB;
+  --text-2:   #6B7A9E;
+  --text-3:   #3A4560;
+  --ui:       'IBM Plex Sans', system-ui, sans-serif;
+  --mono:     'JetBrains Mono', 'Fira Code', monospace;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg:#EEF1F8;--surface:#FFFFFF;--elevated:#F4F7FC;--border:#D5DCF0;--border-hi:#B8C4DF;
+    --accent:#2461E8;--accent-lo:rgba(36,97,232,.10);--rx:#0E9966;--rx-lo:rgba(14,153,102,.10);
+    --err:#D43535;--err-lo:rgba(212,53,53,.08);--warn:#C07A10;
+    --text:#1C2440;--text-2:#5A6480;--text-3:#B0BAD4;
+  }
+}
+:root[data-theme="dark"] {
+  --bg:#090C14;--surface:#111622;--elevated:#181E2E;--border:#20293C;--border-hi:#2E3A52;
+  --accent:#4F8AF4;--accent-lo:rgba(79,138,244,.12);--rx:#2FCA8E;--rx-lo:rgba(47,202,142,.10);
+  --err:#EF5350;--err-lo:rgba(239,83,80,.10);--warn:#F0A32A;
+  --text:#C5D0EB;--text-2:#6B7A9E;--text-3:#3A4560;
+}
+:root[data-theme="light"] {
+  --bg:#EEF1F8;--surface:#FFFFFF;--elevated:#F4F7FC;--border:#D5DCF0;--border-hi:#B8C4DF;
+  --accent:#2461E8;--accent-lo:rgba(36,97,232,.10);--rx:#0E9966;--rx-lo:rgba(14,153,102,.10);
+  --err:#D43535;--err-lo:rgba(212,53,53,.08);--warn:#C07A10;
+  --text:#1C2440;--text-2:#5A6480;--text-3:#B0BAD4;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--ui);
+  font-size: 13px;
+  line-height: 1.5;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  gap: 12px;
+  min-height: 100svh;
+}
+
+header { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.logo-mark {
+  width: 28px; height: 28px; background: var(--accent); border-radius: 6px;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+h1 { font-size: 15px; font-weight: 600; letter-spacing: -.01em; }
+.badge {
+  font-family: var(--mono); font-size: 10px; padding: 1px 6px; border-radius: 4px;
+  background: var(--elevated); border: 1px solid var(--border); color: var(--text-2);
+}
+.spacer { flex: 1; }
+.status-pill {
+  display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-2);
+  padding: 4px 10px; border-radius: 20px; border: 1px solid var(--border); background: var(--surface);
+}
+.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-3); transition: background .3s; flex-shrink: 0; }
+.dot.connected { background: var(--rx); box-shadow: 0 0 6px var(--rx); }
+.dot.error     { background: var(--err); }
+.btn-icon {
+  width: 30px; height: 30px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface);
+  color: var(--text-2); cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: border-color .15s, color .15s; flex-shrink: 0;
+}
+.btn-icon:hover { border-color: var(--border-hi); color: var(--text); }
+
+.main { display: flex; gap: 12px; flex: 1; min-height: 0; }
+
+.panel { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.panel-head {
+  padding: 9px 12px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.panel-title { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--text-2); }
+.panel-body { padding: 12px; }
+
+.sidebar { width: 320px; flex-shrink: 0; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
+
+.field { display: flex; flex-direction: column; gap: 5px; }
+.field label { font-size: 11px; font-weight: 500; color: var(--text-2); }
+.text-input, .num-input, .select-input {
+  font-family: var(--mono); font-size: 13px; padding: 7px 10px; border-radius: 6px;
+  border: 1px solid var(--border); background: var(--elevated); color: var(--text);
+  width: 100%; outline: none; transition: border-color .15s; font-variant-numeric: tabular-nums;
+}
+.text-input:focus, .num-input:focus, .select-input:focus { border-color: var(--accent); }
+.field-hint { font-size: 10px; color: var(--text-2); }
+.form-grid { display: flex; flex-direction: column; gap: 10px; }
+.check-row { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text); }
+.check-row input { accent-color: var(--accent); width: 14px; height: 14px; }
+
+details.adv { border-top: 1px solid var(--border); margin-top: 2px; padding-top: 10px; }
+details.adv summary {
+  cursor: pointer; font-size: 11px; font-weight: 600; letter-spacing: .05em;
+  text-transform: uppercase; color: var(--text-2); list-style: none; user-select: none;
+}
+details.adv summary::-webkit-details-marker { display: none; }
+details.adv summary::before { content: '▸ '; }
+details.adv[open] summary::before { content: '▾ '; }
+details.adv .form-grid { margin-top: 10px; }
+
+.btn {
+  width: 100%; padding: 9px 14px; border-radius: 6px; font-family: var(--ui); font-size: 13px; font-weight: 500;
+  cursor: pointer; border: none; display: flex; align-items: center; justify-content: center; gap: 7px;
+  transition: opacity .15s, background .15s;
+}
+.btn:disabled { opacity: .35; cursor: not-allowed; }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover:not(:disabled) { opacity: .85; }
+.btn-run { background: var(--rx); color: #fff; font-size: 14px; font-weight: 600; padding: 11px; }
+.btn-run:hover:not(:disabled) { opacity: .85; }
+.btn-run.running { background: var(--err); }
+.btn-danger { background: transparent; color: var(--err); border: 1px solid var(--err); }
+.btn-danger:hover:not(:disabled) { background: var(--err); color: #fff; }
+
+.kv-list { display: flex; flex-direction: column; gap: 6px; }
+.kv { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.kv-key { font-size: 11px; color: var(--text-2); flex-shrink: 0; }
+.kv-val { font-family: var(--mono); font-size: 11px; color: var(--text); text-align: right; word-break: break-all; }
+
+.right { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+
+.progress-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.progress-header { display: flex; justify-content: space-between; align-items: baseline; }
+.progress-label { font-size: 11px; color: var(--text-2); font-weight: 500; }
+.progress-pct { font-family: var(--mono); font-size: 12px; color: var(--text); font-variant-numeric: tabular-nums; }
+.progress-bar-track { height: 6px; border-radius: 3px; background: var(--elevated); overflow: hidden; }
+.progress-bar-fill { height: 100%; border-radius: 3px; background: var(--accent); width: 0%; transition: width .1s linear; }
+.progress-bar-fill.done { background: var(--rx); }
+.progress-bar-fill.error { background: var(--err); }
+.progress-sub { font-family: var(--mono); font-size: 10px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+
+.steps { display: flex; flex-direction: column; gap: 0; }
+.step {
+  display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+  border-bottom: 1px solid var(--border); font-size: 12px; color: var(--text-2);
+}
+.step:last-child { border-bottom: none; }
+.step-dot {
+  width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--border-hi);
+  flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  font-size: 9px; color: transparent; transition: all .15s;
+}
+.step.active .step-dot { border-color: var(--accent); background: var(--accent-lo); }
+.step.done .step-dot { border-color: var(--rx); background: var(--rx); color: #fff; }
+.step.done .step-dot::after { content: '✓'; }
+.step.error .step-dot { border-color: var(--err); background: var(--err); color: #fff; }
+.step.error .step-dot::after { content: '✕'; }
+.step.done, .step.active { color: var(--text); }
+.step.error { color: var(--err); }
+
+.log-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.log-panel .panel { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.log-body { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 2px; font-family: var(--mono); font-size: 11px; }
+.log-body::-webkit-scrollbar { width: 4px; }
+.log-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+.log-row {
+  display: grid; grid-template-columns: 58px 40px 1fr; gap: 6px; align-items: baseline;
+  padding: 3px 6px; border-radius: 3px; border-left: 2px solid transparent;
+}
+.log-row:hover { background: var(--elevated); }
+.log-row.info  { border-left-color: var(--border-hi); }
+.log-row.ok    { border-left-color: var(--rx); }
+.log-row.err   { border-left-color: var(--err); background: var(--err-lo); }
+.log-row.warn  { border-left-color: var(--warn); }
+.log-ts  { color: var(--text-3); font-size: 10px; font-variant-numeric: tabular-nums; }
+.log-tag { font-size: 9px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; }
+.info  .log-tag { color: var(--text-2); }
+.ok    .log-tag { color: var(--rx); }
+.err   .log-tag { color: var(--err); }
+.warn  .log-tag { color: var(--warn); }
+.log-msg { color: var(--text); white-space: pre-wrap; word-break: break-word; }
+
+.notice {
+  font-size: 11px; color: var(--text-2); background: var(--elevated); border: 1px solid var(--border);
+  border-radius: 6px; padding: 8px 10px; line-height: 1.5;
+}
+
+@media (max-width: 800px) {
+  .main { flex-direction: column; }
+  .sidebar { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-mark">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <path d="M3 8h10M8 3v10" stroke="white" stroke-width="2" stroke-linecap="round"/>
+      <circle cx="8" cy="8" r="2.5" fill="white" opacity=".3"/>
+    </svg>
+  </div>
+  <h1>Ledger Load App</h1>
+  <span class="badge">E0 00 xx xx (SCP)</span>
+  <div class="spacer"></div>
+  <div class="status-pill">
+    <span class="dot" id="statusDot"></span>
+    <span id="statusText">Disconnected</span>
+  </div>
+  <button class="btn-icon" id="themeToggle" aria-label="Theme">
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+      <circle cx="7" cy="7" r="3" stroke="currentColor" stroke-width="1.5"/>
+      <path d="M7 1v1M7 12v1M1 7h1M12 7h1M3.22 3.22l.71.71M10.07 10.07l.71.71M3.22 10.78l.71-.71M10.07 3.93l.71-.71" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>
+  </button>
+</header>
+
+<div class="main">
+
+  <aside class="sidebar">
+
+    <div class="panel">
+      <div class="panel-head">
+        <span class="panel-title">Device</span>
+        <button class="btn btn-danger" id="disconnectBtn" style="display:none;width:auto;padding:3px 10px;font-size:11px">Disconnect</button>
+      </div>
+      <div class="panel-body" id="deviceContent">
+        <div style="text-align:center;padding:12px 0 8px;color:var(--text-2);font-size:12px">
+          No device connected
+        </div>
+        <button class="btn btn-primary" id="connectBtn">
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+            <path d="M3 6.5h7M7 3.5l3 3-3 3" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          Connect
+        </button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><span class="panel-title">Fake app</span></div>
+      <div class="panel-body">
+        <div class="form-grid">
+
+          <div class="field">
+            <label for="appName">App name</label>
+            <input type="text" class="text-input" id="appName" value="TestApp" maxlength="64">
+          </div>
+
+          <div class="field">
+            <label for="apiLevel">API level</label>
+            <input type="number" class="num-input" id="apiLevel" value="1" min="0" max="255" step="1">
+            <span class="field-hint">SDK API level the OS will check the app against</span>
+          </div>
+
+          <div class="field">
+            <label for="targetId">Target device</label>
+            <select class="select-input" id="targetId">
+              <option value="0x33000004">Nano X — 0x33000004</option>
+              <option value="0x33100004">Nano S Plus — 0x33100004</option>
+              <option value="0x33200004">Stax — 0x33200004</option>
+              <option value="0x33300004">Flex — 0x33300004</option>
+              <option value="0x33400004">Apex P — 0x33400004</option>
+              <option value="0x31100002">Nano S — 0x31100002</option>
+              <option value="custom">Custom…</option>
+            </select>
+            <input type="text" class="text-input" id="targetIdCustom" placeholder="0x33000004" style="display:none;margin-top:6px">
+            <span class="field-hint">Must match the connected device's real target ID</span>
+          </div>
+
+          <div class="field">
+            <label for="codeSize">Fake code size (bytes)</label>
+            <input type="number" class="num-input" id="codeSize" value="102400" min="64" max="1048576" step="64">
+          </div>
+
+          <div class="field">
+            <label for="fillMode">Fake code content</label>
+            <select class="select-input" id="fillMode">
+              <option value="random">Random bytes</option>
+              <option value="pattern" selected>Repeating 0xA5</option>
+              <option value="zero">Zero-filled</option>
+            </select>
+            <span class="field-hint">Arbitrary payload — not valid executable code</span>
+          </div>
+
+          <label class="check-row">
+            <input type="checkbox" id="deleteFirst" checked>
+            Delete existing app with this name first
+          </label>
+
+          <label class="check-row">
+            <input type="checkbox" id="verifyAfter" checked>
+            List installed apps after loading
+          </label>
+
+          <details class="adv">
+            <summary>Advanced</summary>
+            <div class="form-grid">
+              <div class="field">
+                <label for="appVersion">App version</label>
+                <input type="text" class="text-input" id="appVersion" value="1.0.0">
+              </div>
+              <div class="field">
+                <label for="appFlags">App flags (u32)</label>
+                <input type="number" class="num-input" id="appFlags" value="0" min="0">
+              </div>
+            </div>
+          </details>
+
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <button class="btn btn-run" id="runBtn" disabled>
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <polygon points="3,2 11,7 3,12" fill="white"/>
+        </svg>
+        Load app
+      </button>
+      <div id="runNote" style="font-size:11px;color:var(--text-2);text-align:center">
+        Connect a device first
+      </div>
+      <button class="btn btn-primary" id="downloadApduBtn" style="display:none">
+        <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+          <path d="M6.5 2v6M4 6l2.5 2.5L9 6M3 10.5h7" stroke="white" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        Download app.apdu
+      </button>
+    </div>
+
+    <div class="notice">
+      This talks directly to the OS/bootloader's app-loader APDUs (SCP handshake, then
+      create&nbsp;app / load&nbsp;segments / commit), the same protocol
+      <code>ledgerblue.loadApp</code> uses. The device must already be in developer mode
+      with sideloading permitted — the on-device confirmation and any custom-CA trust
+      checks are the device's own gatekeeper, not something this page bypasses. The
+      uploaded "code" is arbitrary filler, not valid firmware, so the app is installed
+      but never launched.
+    </div>
+
+  </aside>
+
+  <div class="right">
+
+    <div class="progress-wrap">
+      <div class="progress-header">
+        <span class="progress-label" id="progressLabel">Waiting</span>
+        <span class="progress-pct" id="progressPct">0%</span>
+      </div>
+      <div class="progress-bar-track">
+        <div class="progress-bar-fill" id="progressFill"></div>
+      </div>
+      <span class="progress-sub" id="progressSub">—</span>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><span class="panel-title">Steps</span></div>
+      <div class="steps" id="stepsList"></div>
+    </div>
+
+    <div class="log-panel">
+      <div class="panel">
+        <div class="panel-head">
+          <span class="panel-title">Log</span>
+          <button class="btn-icon" id="clearBtn" aria-label="Clear">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path d="M1.5 3h9M4.5 3V2h3v1M9.5 3l-.6 7H3.1L2.5 3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </div>
+        <div class="log-body" id="logBody"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script type="module">
+import { secp256k1 } from 'https://cdn.jsdelivr.net/npm/@noble/curves@1.6.0/secp256k1/+esm';
+
+// ───────────────────────── byte helpers ─────────────────────────
+function toU8(x) {
+  if (x instanceof Uint8Array) return x;
+  if (Array.isArray(x)) return Uint8Array.from(x);
+  if (typeof x === 'number') return Uint8Array.from([x & 0xFF]);
+  throw new Error('Unsupported byte input: ' + typeof x);
+}
+function concatBytes(...parts) {
+  const arrs = parts.map(toU8);
+  const total = arrs.reduce((s, a) => s + a.length, 0);
+  const out = new Uint8Array(total);
+  let off = 0;
+  for (const a of arrs) { out.set(a, off); off += a.length; }
+  return out;
+}
+function u32be(n) { return new Uint8Array([(n >>> 24) & 0xFF, (n >>> 16) & 0xFF, (n >>> 8) & 0xFF, n & 0xFF]); }
+function u16be(n) { return new Uint8Array([(n >>> 8) & 0xFF, n & 0xFF]); }
+function u8(n) { return new Uint8Array([n & 0xFF]); }
+function strToBytes(s) { return new TextEncoder().encode(s); }
+function bytesToHex(b, max) {
+  const slice = max && b.length > max ? b.subarray(0, max) : b;
+  let s = Array.from(slice).map(x => x.toString(16).padStart(2, '0')).join('');
+  if (max && b.length > max) s += `… (${b.length}B)`;
+  return s;
+}
+function bytesEqual(a, b) {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+function xorBytes(a, b) {
+  const out = new Uint8Array(a.length);
+  for (let i = 0; i < a.length; i++) out[i] = a[i] ^ b[i];
+  return out;
+}
+function randomBytes(n) {
+  const b = new Uint8Array(n);
+  // getRandomValues is limited to 65536 bytes per call
+  for (let off = 0; off < n; off += 65536) {
+    crypto.getRandomValues(b.subarray(off, Math.min(off + 65536, n)));
+  }
+  return b;
+}
+function bytesToBigIntBE(bytes) {
+  let r = 0n;
+  for (const b of bytes) r = (r << 8n) | BigInt(b);
+  return r;
+}
+function bigIntToBytesBE(x, len) {
+  const out = new Uint8Array(len);
+  for (let i = len - 1; i >= 0; i--) { out[i] = Number(x & 0xFFn); x >>= 8n; }
+  return out;
+}
+async function sha256(bytes) {
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return new Uint8Array(digest);
+}
+
+// ───────────────────────── TLV / LV encoding (hexLoader.py) ─────────────────────────
+function encodeLV(v) {
+  const L = v.length;
+  if (L < 128) return concatBytes(u8(L), v);
+  if (L < 256) return concatBytes(u8(0x81), u8(L), v);
+  if (L < 65536) return concatBytes(u8(0x82), u16be(L), v);
+  throw new Error('Unimplemented LV encoding');
+}
+function encodeTLV(t, v) {
+  const L = v.length;
+  let head;
+  if (L < 128) head = concatBytes(u8(t), u8(L));
+  else if (L < 256) head = concatBytes(u8(t), u8(0x81), u8(L));
+  else if (L < 65536) head = concatBytes(u8(t), u8(0x82), u16be(L));
+  else throw new Error('Unimplemented TLV encoding');
+  return concatBytes(head, v);
+}
+const BOLOS_TAG_APPNAME = 0x01;
+const BOLOS_TAG_APPVERSION = 0x02;
+const BOLOS_TAG_DERIVEPATH = 0x04;
+
+// ───────────────────────── CRC16-CCITT (hexLoader.py TABLE_CRC16_CCITT, copied verbatim) ─────────────────────────
+const TABLE_CRC16_CCITT = [
+  0x0000,0x1021,0x2042,0x3063,0x4084,0x50A5,0x60C6,0x70E7,
+  0x8108,0x9129,0xA14A,0xB16B,0xC18C,0xD1AD,0xE1CE,0xF1EF,
+  0x1231,0x0210,0x3273,0x2252,0x52B5,0x4294,0x72F7,0x62D6,
+  0x9339,0x8318,0xB37B,0xA35A,0xD3BD,0xC39C,0xF3FF,0xE3DE,
+  0x2462,0x3443,0x0420,0x1401,0x64E6,0x74C7,0x44A4,0x5485,
+  0xA56A,0xB54B,0x8528,0x9509,0xE5EE,0xF5CF,0xC5AC,0xD58D,
+  0x3653,0x2672,0x1611,0x0630,0x76D7,0x66F6,0x5695,0x46B4,
+  0xB75B,0xA77A,0x9719,0x8738,0xF7DF,0xE7FE,0xD79D,0xC7BC,
+  0x48C4,0x58E5,0x6886,0x78A7,0x0840,0x1861,0x2802,0x3823,
+  0xC9CC,0xD9ED,0xE98E,0xF9AF,0x8948,0x9969,0xA90A,0xB92B,
+  0x5AF5,0x4AD4,0x7AB7,0x6A96,0x1A71,0x0A50,0x3A33,0x2A12,
+  0xDBFD,0xCBDC,0xFBBF,0xEB9E,0x9B79,0x8B58,0xBB3B,0xAB1A,
+  0x6CA6,0x7C87,0x4CE4,0x5CC5,0x2C22,0x3C03,0x0C60,0x1C41,
+  0xEDAE,0xFD8F,0xCDEC,0xDDCD,0xAD2A,0xBD0B,0x8D68,0x9D49,
+  0x7E97,0x6EB6,0x5ED5,0x4EF4,0x3E13,0x2E32,0x1E51,0x0E70,
+  0xFF9F,0xEFBE,0xDFDD,0xCFFC,0xBF1B,0xAF3A,0x9F59,0x8F78,
+  0x9188,0x81A9,0xB1CA,0xA1EB,0xD10C,0xC12D,0xF14E,0xE16F,
+  0x1080,0x00A1,0x30C2,0x20E3,0x5004,0x4025,0x7046,0x6067,
+  0x83B9,0x9398,0xA3FB,0xB3DA,0xC33D,0xD31C,0xE37F,0xF35E,
+  0x02B1,0x1290,0x22F3,0x32D2,0x4235,0x5214,0x6277,0x7256,
+  0xB5EA,0xA5CB,0x95A8,0x8589,0xF56E,0xE54F,0xD52C,0xC50D,
+  0x34E2,0x24C3,0x14A0,0x0481,0x7466,0x6447,0x5424,0x4405,
+  0xA7DB,0xB7FA,0x8799,0x97B8,0xE75F,0xF77E,0xC71D,0xD73C,
+  0x26D3,0x36F2,0x0691,0x16B0,0x6657,0x7676,0x4615,0x5634,
+  0xD94C,0xC96D,0xF90E,0xE92F,0x99C8,0x89E9,0xB98A,0xA9AB,
+  0x5844,0x4865,0x7806,0x6827,0x18C0,0x08E1,0x3882,0x28A3,
+  0xCB7D,0xDB5C,0xEB3F,0xFB1E,0x8BF9,0x9BD8,0xABBB,0xBB9A,
+  0x4A75,0x5A54,0x6A37,0x7A16,0x0AF1,0x1AD0,0x2AB3,0x3A92,
+  0xFD2E,0xED0F,0xDD6C,0xCD4D,0xBDAA,0xAD8B,0x9DE8,0x8DC9,
+  0x7C26,0x6C07,0x5C64,0x4C45,0x3CA2,0x2C83,0x1CE0,0x0CC1,
+  0xEF1F,0xFF3E,0xCF5D,0xDF7C,0xAF9B,0xBFBA,0x8FD9,0x9FF8,
+  0x6E17,0x7E36,0x4E55,0x5E74,0x2E93,0x3EB2,0x0ED1,0x1EF0,
+];
+function crc16(data) {
+  let crc = 0xFFFF;
+  for (let i = 0; i < data.length; i++) {
+    let b = data[i] & 0xFF;
+    b = (b ^ ((crc >> 8) & 0xFF)) & 0xFF;
+    crc = (TABLE_CRC16_CCITT[b] ^ ((crc << 8) & 0xFFFF)) & 0xFFFF;
+  }
+  return crc;
+}
+
+// ───────────────────────── AES-128 (self-contained, no CDN dep) ─────────────────────────
+function gmul(a, b) {
+  let p = 0;
+  for (let i = 0; i < 8; i++) {
+    if (b & 1) p ^= a;
+    const hi = a & 0x80;
+    a = (a << 1) & 0xFF;
+    if (hi) a ^= 0x1B;
+    b >>= 1;
+  }
+  return p & 0xFF;
+}
+const { SBOX, RSBOX } = (() => {
+  const inv = new Uint8Array(256);
+  for (let a = 1; a < 256; a++) {
+    for (let b = 1; b < 256; b++) {
+      if (gmul(a, b) === 1) { inv[a] = b; break; }
+    }
+  }
+  const sbox = new Uint8Array(256), rsbox = new Uint8Array(256);
+  for (let a = 0; a < 256; a++) {
+    const x = inv[a];
+    let s = x, r = x;
+    for (let i = 0; i < 4; i++) { r = ((r << 1) | (r >> 7)) & 0xFF; s ^= r; }
+    s ^= 0x63;
+    sbox[a] = s;
+    rsbox[s] = a;
+  }
+  return { SBOX: sbox, RSBOX: rsbox };
+})();
+const RCON = (() => {
+  const r = new Uint8Array(11);
+  r[1] = 1;
+  for (let i = 2; i <= 10; i++) {
+    let v = r[i - 1] << 1;
+    if (v & 0x100) v ^= 0x11B;
+    r[i] = v & 0xFF;
+  }
+  return r;
+})();
+function aesKeyExpansion(key) {
+  const w = new Uint8Array(176); // 11 round keys * 16 bytes (AES-128)
+  w.set(key, 0);
+  let n = 16, rconIdx = 1;
+  const temp = new Uint8Array(4);
+  while (n < w.length) {
+    temp.set(w.subarray(n - 4, n));
+    if (n % 16 === 0) {
+      const t0 = temp[0];
+      temp[0] = SBOX[temp[1]]; temp[1] = SBOX[temp[2]]; temp[2] = SBOX[temp[3]]; temp[3] = SBOX[t0];
+      temp[0] ^= RCON[rconIdx++];
+    }
+    for (let i = 0; i < 4; i++) w[n + i] = w[n - 16 + i] ^ temp[i];
+    n += 4;
+  }
+  return w;
+}
+function addRoundKey(s, w, round) { for (let i = 0; i < 16; i++) s[i] ^= w[round * 16 + i]; }
+function subBytes(s) { for (let i = 0; i < 16; i++) s[i] = SBOX[s[i]]; }
+function invSubBytes(s) { for (let i = 0; i < 16; i++) s[i] = RSBOX[s[i]]; }
+function shiftRows(s) {
+  let t;
+  t = s[1]; s[1] = s[5]; s[5] = s[9]; s[9] = s[13]; s[13] = t;
+  t = s[2]; s[2] = s[10]; s[10] = t;
+  t = s[6]; s[6] = s[14]; s[14] = t;
+  t = s[15]; s[15] = s[11]; s[11] = s[7]; s[7] = s[3]; s[3] = t;
+}
+function invShiftRows(s) {
+  let t;
+  t = s[13]; s[13] = s[9]; s[9] = s[5]; s[5] = s[1]; s[1] = t;
+  t = s[2]; s[2] = s[10]; s[10] = t;
+  t = s[6]; s[6] = s[14]; s[14] = t;
+  t = s[3]; s[3] = s[7]; s[7] = s[11]; s[11] = s[15]; s[15] = t;
+}
+function mixColumns(s) {
+  for (let c = 0; c < 4; c++) {
+    const i = c * 4, a0 = s[i], a1 = s[i + 1], a2 = s[i + 2], a3 = s[i + 3];
+    s[i] = gmul(a0, 2) ^ gmul(a1, 3) ^ a2 ^ a3;
+    s[i + 1] = a0 ^ gmul(a1, 2) ^ gmul(a2, 3) ^ a3;
+    s[i + 2] = a0 ^ a1 ^ gmul(a2, 2) ^ gmul(a3, 3);
+    s[i + 3] = gmul(a0, 3) ^ a1 ^ a2 ^ gmul(a3, 2);
+  }
+}
+function invMixColumns(s) {
+  for (let c = 0; c < 4; c++) {
+    const i = c * 4, a0 = s[i], a1 = s[i + 1], a2 = s[i + 2], a3 = s[i + 3];
+    s[i] = gmul(a0, 14) ^ gmul(a1, 11) ^ gmul(a2, 13) ^ gmul(a3, 9);
+    s[i + 1] = gmul(a0, 9) ^ gmul(a1, 14) ^ gmul(a2, 11) ^ gmul(a3, 13);
+    s[i + 2] = gmul(a0, 13) ^ gmul(a1, 9) ^ gmul(a2, 14) ^ gmul(a3, 11);
+    s[i + 3] = gmul(a0, 11) ^ gmul(a1, 13) ^ gmul(a2, 9) ^ gmul(a3, 14);
+  }
+}
+function aesEncryptBlock(block, w) {
+  const s = Uint8Array.from(block);
+  addRoundKey(s, w, 0);
+  for (let round = 1; round < 10; round++) { subBytes(s); shiftRows(s); mixColumns(s); addRoundKey(s, w, round); }
+  subBytes(s); shiftRows(s); addRoundKey(s, w, 10);
+  return s;
+}
+function aesDecryptBlock(block, w) {
+  const s = Uint8Array.from(block);
+  addRoundKey(s, w, 10);
+  for (let round = 9; round >= 1; round--) { invShiftRows(s); invSubBytes(s); addRoundKey(s, w, round); invMixColumns(s); }
+  invShiftRows(s); invSubBytes(s); addRoundKey(s, w, 0);
+  return s;
+}
+function aesCbcEncryptNoPad(key, iv, data) {
+  const w = aesKeyExpansion(key);
+  let prev = iv;
+  const out = new Uint8Array(data.length);
+  for (let i = 0; i < data.length; i += 16) {
+    const block = xorBytes(data.subarray(i, i + 16), prev);
+    const enc = aesEncryptBlock(block, w);
+    out.set(enc, i);
+    prev = enc;
+  }
+  return out;
+}
+function aesCbcDecryptNoPad(key, iv, data) {
+  const w = aesKeyExpansion(key);
+  let prev = iv;
+  const out = new Uint8Array(data.length);
+  for (let i = 0; i < data.length; i += 16) {
+    const block = data.subarray(i, i + 16);
+    const dec = aesDecryptBlock(block, w);
+    out.set(xorBytes(dec, prev), i);
+    prev = block;
+  }
+  return out;
+}
+function padScp(data) {
+  let out = concatBytes(data, [0x80]);
+  while (out.length % 16 !== 0) out = concatBytes(out, [0x00]);
+  return out;
+}
+function unpadScp(data) {
+  let L = data.length - 1;
+  while (data[L] !== 0x80) { L--; if (L === -1) throw new Error('Invalid SCP ENC padding'); }
+  return data.slice(0, L);
+}
+
+// ───────────────────────── secp256k1 helpers (ecWrapper.py, USE_SECP path) ─────────────────────────
+function randomPrivateKey() {
+  while (true) {
+    const b = randomBytes(32);
+    const n = bytesToBigIntBE(b);
+    if (n > 0n && n < secp256k1.CURVE.n) return b;
+  }
+}
+function derEncodeSignature(r, s) {
+  function encInt(x) {
+    let bytes = bigIntToBytesBE(x, 32);
+    let i = 0; while (i < bytes.length - 1 && bytes[i] === 0) i++;
+    bytes = bytes.slice(i);
+    if (bytes[0] & 0x80) bytes = concatBytes([0x00], bytes);
+    return concatBytes([0x02, bytes.length], bytes);
+  }
+  const rEnc = encInt(r), sEnc = encInt(s);
+  const body = concatBytes(rEnc, sEnc);
+  return concatBytes([0x30, body.length], body);
+}
+function ecdsaSignDER(privKey, msgHash32) {
+  const sig = secp256k1.sign(msgHash32, privKey, { lowS: true });
+  return derEncodeSignature(sig.r, sig.s);
+}
+function ecdsaVerifyDER(pubKey, sigDER, msgHash32) {
+  try { return secp256k1.verify(sigDER, msgHash32, pubKey, { lowS: false }); }
+  catch (e) { return false; }
+}
+async function scpDeriveKey(ecdhSecret, keyIndex) {
+  let retry = 0, digest;
+  while (true) {
+    const buf = concatBytes(u32be(keyIndex), u8(retry), ecdhSecret);
+    digest = await sha256(buf);
+    if (bytesToBigIntBE(digest) < secp256k1.CURVE.n) break;
+    retry++;
+  }
+  const pubkey = secp256k1.getPublicKey(digest, false); // uncompressed 0x04||X||Y
+  return await sha256(pubkey);
+}
+
+// ───────────────────────── SCP v2/v3 handshake (deployed.py getDeployedSecretV2) ─────────────────────────
+async function establishScp(rawExchange, targetId, log) {
+  if ((targetId & 0xF) < 2) throw new Error('Target ID does not support SCP V2/V3');
+
+  const testMasterPriv = randomPrivateKey();
+  const testMasterPub = secp256k1.getPublicKey(testMasterPriv, false);
+
+  const targetIdBytes = u32be(targetId);
+  await rawExchange(concatBytes([0xE0, 0x04, 0x00, 0x00, targetIdBytes.length], targetIdBytes));
+
+  const nonce = randomBytes(8);
+  const authInfo = await rawExchange(concatBytes([0xE0, 0x50, 0x00, 0x00, nonce.length], nonce));
+  const deviceNonce = authInfo.slice(4, 12);
+
+  log('info', `Using ephemeral signer key ${bytesToHex(testMasterPub, 12)}`);
+  {
+    const dataToSign = concatBytes([0x01], testMasterPub);
+    const sigHash = await sha256(dataToSign);
+    const sig = ecdsaSignDER(testMasterPriv, sigHash);
+    const cert = concatBytes([testMasterPub.length], testMasterPub, [sig.length], sig);
+    await rawExchange(concatBytes([0xE0, 0x51, 0x00, 0x00, cert.length], cert));
+  }
+
+  const ephemeralPriv = randomPrivateKey();
+  const ephemeralPub = secp256k1.getPublicKey(ephemeralPriv, false);
+  {
+    const dataToSign = concatBytes([0x11], nonce, deviceNonce, ephemeralPub);
+    const sigHash = await sha256(dataToSign);
+    const sig = ecdsaSignDER(testMasterPriv, sigHash);
+    const cert = concatBytes([ephemeralPub.length], ephemeralPub, [sig.length], sig);
+    await rawExchange(concatBytes([0xE0, 0x51, 0x80, 0x00, cert.length], cert));
+  }
+
+  let index = 0, lastDevPub = testMasterPub, devicePublicKey = null;
+  while (true) {
+    let certificate;
+    if (index === 0) certificate = await rawExchange([0xE0, 0x52, 0x00, 0x00, 0x00]);
+    else if (index === 1) certificate = await rawExchange([0xE0, 0x52, 0x80, 0x00, 0x00]);
+    else break;
+    if (!certificate || certificate.length === 0) break;
+
+    let offset = 1;
+    const certificateHeader = certificate.slice(offset, offset + certificate[offset - 1]);
+    offset += certificate[offset - 1] + 1;
+    const certificatePublicKey = certificate.slice(offset, offset + certificate[offset - 1]);
+    offset += certificate[offset - 1] + 1;
+    const certificateSignature = certificate.slice(offset, offset + certificate[offset - 1]);
+
+    let signedData;
+    if (index === 0) {
+      devicePublicKey = certificatePublicKey;
+      signedData = concatBytes([0x02], certificateHeader, certificatePublicKey);
+    } else {
+      signedData = concatBytes([0x12], deviceNonce, nonce, certificatePublicKey);
+    }
+    const verifyHash = await sha256(signedData);
+    const ok = ecdsaVerifyDER(lastDevPub, certificateSignature, verifyHash);
+    if (!ok) {
+      if (index === 0) log('warn', 'Broken certificate chain at device identity cert — loading from user key (expected, we did not sign this device)');
+      else throw new Error('Broken certificate chain (ephemeral key certificate)');
+    }
+    lastDevPub = certificatePublicKey;
+    index++;
+  }
+
+  await rawExchange([0xE0, 0x53, 0x00, 0x00, 0x00]);
+  const sharedPoint = secp256k1.getSharedSecret(ephemeralPriv, lastDevPub, true); // compressed point
+  const secret = await sha256(sharedPoint); // matches libsecp256k1's default ECDH hash
+
+  if ((targetId & 0xF) === 0x2) return { key: secret.slice(0, 16) };
+  return { ecdhSecret: secret, devicePublicKey };
+}
+
+// ───────────────────────── Loader (hexLoader.py HexLoader, subset used by loadApp.py --tlv path) ─────────────────────────
+class Loader {
+  constructor(rawExchange, cla) {
+    this.rawExchange = rawExchange;
+    this.cla = cla;
+    this.loadApduCount = 0;
+  }
+  static async create(rawExchange, cla, secretResult) {
+    const loader = new Loader(rawExchange, cla);
+    if (secretResult.ecdhSecret) {
+      loader.scpVersion = 3;
+      loader.encKey = (await scpDeriveKey(secretResult.ecdhSecret, 0)).slice(0, 16);
+      loader.macKey = (await scpDeriveKey(secretResult.ecdhSecret, 1)).slice(0, 16);
+      loader.encIv = new Uint8Array(16);
+      loader.macIv = new Uint8Array(16);
+    } else {
+      loader.scpVersion = 2;
+      loader.key = secretResult.key;
+      loader.iv = new Uint8Array(16);
+    }
+    return loader;
+  }
+  wrap(data) {
+    if (!data || data.length === 0) return data;
+    const padded = padScp(data);
+    if (this.scpVersion === 3) {
+      const enc = aesCbcEncryptNoPad(this.encKey, this.encIv, padded);
+      this.encIv = enc.slice(-16);
+      const macFull = aesCbcEncryptNoPad(this.macKey, this.macIv, enc);
+      this.macIv = macFull.slice(-16);
+      return concatBytes(enc, this.macIv.slice(-14));
+    }
+    const enc = aesCbcEncryptNoPad(this.key, this.iv, padded);
+    this.iv = enc.slice(-16);
+    return enc;
+  }
+  unwrap(data) {
+    if (!data || data.length === 0 || data.length === 2) return data;
+    if (this.scpVersion === 3) {
+      const macPart = data.slice(-14);
+      const encPart = data.slice(0, -14);
+      const macFull = aesCbcEncryptNoPad(this.macKey, this.macIv, encPart);
+      const newMacIv = macFull.slice(-16);
+      if (!bytesEqual(newMacIv.slice(-14), macPart)) throw new Error('Invalid SCP MAC');
+      this.macIv = newMacIv;
+      const newEncIv = encPart.slice(-16);
+      const dec = aesCbcDecryptNoPad(this.encKey, this.encIv, encPart);
+      this.encIv = newEncIv;
+      return unpadScp(dec);
+    }
+    const dec = aesCbcDecryptNoPad(this.key, this.iv, data);
+    const result = unpadScp(dec);
+    this.iv = data.slice(-16);
+    return result;
+  }
+  async exchange(ins, p1, p2, data) {
+    const wrapped = this.wrap(data);
+    const lc = wrapped ? wrapped.length : 0;
+    const apdu = concatBytes([this.cla, ins, p1, p2, lc], wrapped || new Uint8Array(0));
+    const response = await this.rawExchange(apdu);
+    return this.unwrap(response);
+  }
+  selectSegment(baseAddress) { return this.exchange(0x00, 0x00, 0x00, concatBytes([0x05], u32be(baseAddress))); }
+  loadSegmentChunk(offset, chunk) { this.loadApduCount++; return this.exchange(0x00, 0x00, 0x00, concatBytes([0x06], u16be(offset), chunk)); }
+  flushSegment() { return this.exchange(0x00, 0x00, 0x00, Uint8Array.from([0x07])); }
+  crcSegment(offsetSegment, lengthSegment, crcExpected) {
+    return this.exchange(0x00, 0x00, 0x00, concatBytes([0x08], u16be(offsetSegment), u32be(lengthSegment), u16be(crcExpected)));
+  }
+  createApp(codeLength, apiLevel, dataLength, installParamsLength, flags, bootOffset) {
+    const params = concatBytes(u8(apiLevel), u32be(codeLength), u32be(dataLength), u32be(installParamsLength), u32be(flags), u32be(bootOffset));
+    return this.exchange(0x00, 0x00, 0x00, concatBytes([0x0b], params));
+  }
+  deleteApp(appNameBytes) {
+    return this.exchange(0x00, 0x00, 0x00, concatBytes([0x0c], u8(appNameBytes.length), appNameBytes));
+  }
+  commit(signature) {
+    let data = Uint8Array.from([0x09]);
+    if (signature) data = concatBytes(data, u8(signature.length), signature);
+    return this.exchange(0x00, 0x00, 0x00, data);
+  }
+  async listApp() {
+    const response = await this.exchange(0x00, 0x00, 0x00, Uint8Array.from([0x0e]));
+    const result = [];
+    let offset = 0;
+    if (response.length > 0 && response[0] === 0x01) {
+      offset += 1;
+      while (offset !== response.length) {
+        offset += 1; // entry size, skipped
+        offset += 4; // flags, skipped
+        offset += 32; // hash_code_data, skipped
+        offset += 32; // hash, skipped
+        const nameLen = response[offset];
+        const name = new TextDecoder().decode(response.slice(offset + 1, offset + 1 + nameLen));
+        offset += 1 + nameLen;
+        result.push(name);
+      }
+    }
+    return result;
+  }
+  async load(areas, onProgress, doCRC = true) {
+    const maxLenPerApdu = 240, HEADER = 3, MINPAD = 1, MAC = 14;
+    const totalBytes = areas.reduce((s, a) => s + a.data.length, 0);
+    let sentBytes = 0;
+    for (const area of areas) {
+      await this.selectSegment(area.start);
+      const data = area.data;
+      if (data.length === 0) continue;
+      if (data.length > 0x10000) throw new Error('Invalid data size for loader');
+      const crc = crc16(data);
+      let offset = 0, length = data.length;
+      while (length > 0) {
+        let chunkLen;
+        if (length > maxLenPerApdu - HEADER - MINPAD - MAC) {
+          chunkLen = maxLenPerApdu - HEADER - MINPAD - MAC;
+          if (chunkLen % 16 !== 0) chunkLen -= chunkLen % 16;
+        } else {
+          chunkLen = length;
+        }
+        const chunk = data.subarray(offset, offset + chunkLen);
+        await this.loadSegmentChunk(offset, chunk);
+        offset += chunkLen; length -= chunkLen; sentBytes += chunkLen;
+        if (onProgress) onProgress(sentBytes, totalBytes);
+      }
+      await this.flushSegment();
+      if (doCRC) await this.crcSegment(0, data.length, crc);
+    }
+  }
+}
+
+const SW_HINTS = {
+  0x6982: 'Have you set up developer mode / a custom CA on this device (resetCustomCA / setupCustomCA)?',
+  0x6985: 'Condition of use not satisfied — denied by the user on-device?',
+  0x6A84: 'Not enough space on the device?',
+  0x6A85: 'Not enough space on the device?',
+  0x6A83: 'This app may require a library to be installed first?',
+  0x6484: 'Are you using the correct target ID for this device?',
+  0x6D00: 'Unexpected device state — is the dashboard the active app?',
+  0x6E00: 'Unexpected device state — is the dashboard the active app?',
+  0x5515: 'Did you unlock the device?',
+  0x6814: 'Unexpected target device — wrong target ID selected?',
+  0x511F: "The device's OS version may not be compatible with this API level",
+  0x5120: 'Sideloading is not supported on this device',
+};
+function swHint(sw) { return SW_HINTS[sw] || ''; }
+
+// ───────────────────────── GET VERSION (E0 01 00 00 00) ─────────────────────────
+const TARGET_ID_MODEL = {
+  0x31100002: 'nanos',
+  0x33000004: 'nanox',
+  0x33100004: 'nanos+',
+  0x33200004: 'stax',
+  0x33300004: 'flex',
+  0x33400004: 'apex_p',
+};
+function parseGetVersion(data) {
+  const targetId = ((data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3]) >>> 0;
+  const osVersionLen = data[4];
+  const osVersion = new TextDecoder().decode(data.slice(5, 5 + osVersionLen));
+  return { targetId, osVersion };
+}
+// Mirrors ledger-secure-sdk/api_levels.json (embedded so this page has no fetch/server dependency)
+const API_LEVELS = {
+  "LNS": ["nanos_2.1.0"],
+  "1": ["nanox_2.1.0", "nanos+_1.1.0"],
+  "2": ["only rc releases"],
+  "3": ["only rc releases"],
+  "4": ["only rc releases"],
+  "5": ["nanox_2.2.0", "nanox_2.2.1", "nanox_2.2.2", "nanox_2.2.3", "nanos+_1.1.1"],
+  "6": ["only rc releases"],
+  "7": ["only rc releases"],
+  "7.1": ["only rc releases"],
+  "7.2": ["only rc releases"],
+  "8": ["stax_1.0.0"],
+  "9": ["only rc releases"],
+  "10": ["stax_1.1.0"],
+  "11": ["stax_1.2.0", "stax_1.2.1"],
+  "12": ["nanox_2.3.0-rc2", "nanos+_1.2.0-rc2"],
+  "13": ["stax_1.3.0"],
+  "14": ["only rc releases"],
+  "15": ["stax_1.4.0"],
+  "16": ["europa_0.1.0-re1"],
+  "17": ["europa_0.1.0-re2"],
+  "18": ["europa_0.1.0-re3", "flex_0.2.0-rc1", "flex_0.2.0-rc2", "nanox_2.3.0-rc5", "nanos+_1.2.0-rc5", "nanos+_1.2.0"],
+  "19": ["flex_1.0.0-rc1", "flex_1.0.0-rc2", "flex_1.0.0", "flex_1.0.1"],
+  "20": ["stax_1.5.0-rc1", "flex_1.1.0-rc1"],
+  "21": ["stax_1.5.0-rc2", "flex_1.1.0-rc2", "stax_1.5.0", "flex_1.1.0", "flex_1.1.1", "nanos+_1.3.0-rc1", "nanox_2.4.0-rc1", "stax_1.6.0-rc1", "flex_1.2.0-rc1"],
+  "22": ["nanos+_1.3.0-rc2", "nanox_2.4.0-rc2", "stax_1.6.0-rc2", "flex_1.2.0-rc2", "nanos+_1.3.0", "nanox_2.4.0", "stax_1.6.0", "flex_1.2.0", "nanos+_1.3.1", "nanox_2.4.1", "stax_1.6.1", "flex_1.2.1", "nanos+_1.3.2", "nanox_2.4.2", "stax_1.6.2", "flex_1.2.2"],
+  "24": ["nanos+_1.4.1", "nanox_2.5.1", "stax_1.8.1", "flex_1.4.1"],
+  "25": ["apex_p_1.0.4", "nanos+_1.5.0", "nanox_2.6.0", "stax_1.9.0", "flex_1.5.0"],
+  "26": ["apex_p_1.1.0", "nanos+_1.6.0", "nanox_2.7.0", "stax_1.10.0", "flex_1.6.0"],
+};
+function parseSemver(v) {
+  const m = /^(\d+)\.(\d+)\.(\d+)/.exec(v);
+  return m ? [+m[1], +m[2], +m[3]] : null;
+}
+function compareSemver(a, b) {
+  for (let i = 0; i < 3; i++) if (a[i] !== b[i]) return a[i] - b[i];
+  return 0;
+}
+// api_levels.json only records a version the first time an API level appears — later
+// patch releases (e.g. flex_1.5.1) that don't bump the API level are not re-listed for
+// every model. Falls back to the highest listed *stable* version <= the device's version
+// for the same model, since a patch bump alone never changes the API level.
+function resolveApiLevel(levels, model, osVersion) {
+  if (!model) return { level: 0, exact: false, matchedVersion: null };
+  const exactKey = `${model}_${osVersion}`;
+  const targetVer = parseSemver(osVersion);
+  let fallback = null; // { level, version, entry }
+  for (const [levelKey, entries] of Object.entries(levels)) {
+    if (!Array.isArray(entries)) continue;
+    const n = parseInt(levelKey, 10);
+    const isNumericLevel = Number.isFinite(n) && String(n) === levelKey;
+    for (const entry of entries) {
+      if (entry === exactKey) return { level: isNumericLevel ? n : 0, exact: true, matchedVersion: entry };
+      if (!isNumericLevel || !targetVer) continue;
+      if (!entry.startsWith(model + '_') || entry.includes('-')) continue; // wrong model, or rc/re pre-release
+      const ver = parseSemver(entry.slice(model.length + 1));
+      if (!ver || compareSemver(ver, targetVer) > 0) continue;
+      if (!fallback || compareSemver(ver, fallback.version) > 0) fallback = { level: n, version: ver, entry };
+    }
+  }
+  if (fallback) return { level: fallback.level, exact: false, matchedVersion: fallback.entry };
+  return { level: 0, exact: false, matchedVersion: null };
+}
+
+// ───────────────────────── WebUSB transport (channel 0101, tag 0x05, 64B packets) ─────────────────────────
+let device = null, iface = null, epIn = null, epOut = null;
+let capturedApdus = [];
+const CHANNEL = [0x01, 0x01];
+const TAG_APDU = 0x05;
+const PKT = 64;
+
+function frameAPDU(apdu) {
+  const pkts = [];
+  let seq = 0, off = 0;
+  const p0 = new Uint8Array(PKT);
+  p0[0] = CHANNEL[0]; p0[1] = CHANNEL[1]; p0[2] = TAG_APDU;
+  p0[3] = (seq >> 8) & 0xFF; p0[4] = seq & 0xFF;
+  p0[5] = (apdu.length >> 8) & 0xFF; p0[6] = apdu.length & 0xFF;
+  const c0 = apdu.slice(0, PKT - 7); p0.set(c0, 7); off += c0.length; seq++;
+  pkts.push(p0);
+  while (off < apdu.length) {
+    const pN = new Uint8Array(PKT);
+    pN[0] = CHANNEL[0]; pN[1] = CHANNEL[1]; pN[2] = TAG_APDU;
+    pN[3] = (seq >> 8) & 0xFF; pN[4] = seq & 0xFF;
+    const cN = apdu.slice(off, off + PKT - 5); pN.set(cN, 5); off += cN.length; seq++;
+    pkts.push(pN);
+  }
+  return pkts;
+}
+
+async function rawExchange(apduInput) {
+  if (!device) throw new Error('No device connected');
+  const apdu = apduInput instanceof Uint8Array ? apduInput : Uint8Array.from(apduInput);
+  capturedApdus.push(apdu.slice());
+  const pkts = frameAPDU(apdu);
+  for (const p of pkts) await device.transferOut(epOut.endpointNumber, p);
+
+  let full = new Uint8Array(0);
+  let total = null, recv = 0, seq = 0;
+  while (true) {
+    const res = await device.transferIn(epIn.endpointNumber, PKT);
+    if (!res.data || !res.data.byteLength) break;
+    const view = new Uint8Array(res.data.buffer);
+    if (seq === 0) {
+      total = (view[5] << 8) | view[6];
+      const take = Math.min(view.length - 7, total);
+      full = concatBytes(full, view.slice(7, 7 + take));
+      recv += take;
+    } else {
+      const take = Math.min(view.length - 5, total - recv);
+      full = concatBytes(full, view.slice(5, 5 + take));
+      recv += take;
+    }
+    seq++;
+    if (total !== null && recv >= total) break;
+  }
+  if (full.length < 2) throw new Error('Short response from device');
+  const sw = (full[full.length - 2] << 8) | full[full.length - 1];
+  const data = full.slice(0, full.length - 2);
+  if (sw !== 0x9000 && (sw & 0xFF00) !== 0x6100 && (sw & 0xFF00) !== 0x6C00) {
+    const hint = swHint(sw);
+    throw new Error(`Device returned SW=0x${sw.toString(16).padStart(4, '0')}${hint ? ' — ' + hint : ''}`);
+  }
+  return data;
+}
+
+function findIface(dev) {
+  for (const ifc of dev.configuration.interfaces) {
+    for (const alt of ifc.alternates) {
+      const i = alt.endpoints.find(e => e.endpointNumber === 3 && e.direction === 'in');
+      const o = alt.endpoints.find(e => e.endpointNumber === 3 && e.direction === 'out');
+      if (i && o) return { interfaceNumber: ifc.interfaceNumber, epIn: i, epOut: o };
+    }
+  }
+  return null;
+}
+
+// ───────────────────────── DOM / UI wiring ─────────────────────────
+let theme = 'system';
+const connectBtn    = document.getElementById('connectBtn');
+const disconnectBtn = document.getElementById('disconnectBtn');
+const runBtn         = document.getElementById('runBtn');
+const runNote        = document.getElementById('runNote');
+const downloadApduBtn = document.getElementById('downloadApduBtn');
+const deviceContent  = document.getElementById('deviceContent');
+const statusDot      = document.getElementById('statusDot');
+const statusText     = document.getElementById('statusText');
+const progressFill   = document.getElementById('progressFill');
+const progressLabel  = document.getElementById('progressLabel');
+const progressPct    = document.getElementById('progressPct');
+const progressSub    = document.getElementById('progressSub');
+const logBody        = document.getElementById('logBody');
+const stepsList      = document.getElementById('stepsList');
+const targetIdSel    = document.getElementById('targetId');
+const targetIdCustom = document.getElementById('targetIdCustom');
+
+document.getElementById('themeToggle').addEventListener('click', () => {
+  const root = document.documentElement;
+  theme = theme === 'system'
+    ? (window.matchMedia('(prefers-color-scheme:dark)').matches ? 'light' : 'dark')
+    : theme === 'dark' ? 'light' : 'dark';
+  root.setAttribute('data-theme', theme);
+});
+
+document.getElementById('clearBtn').addEventListener('click', () => { logBody.innerHTML = ''; });
+
+function log(type, msg) {
+  const now = new Date();
+  const ts = now.toTimeString().slice(0, 8) + '.' + String(now.getMilliseconds()).padStart(3, '0');
+  const tags = { info: 'INFO', ok: 'OK', err: 'ERR', warn: 'WARN' };
+  const el = document.createElement('div');
+  el.className = `log-row ${type}`;
+  el.innerHTML = `<span class="log-ts">${ts}</span><span class="log-tag">${tags[type] || type}</span><span class="log-msg"></span>`;
+  el.querySelector('.log-msg').textContent = msg;
+  logBody.appendChild(el);
+  logBody.scrollTop = logBody.scrollHeight;
+}
+
+function setProgress(pct, label, sub, state) {
+  progressFill.style.width = pct + '%';
+  progressFill.className = 'progress-bar-fill' + (state === 'done' ? ' done' : state === 'error' ? ' error' : '');
+  progressLabel.textContent = label;
+  progressPct.textContent = Math.round(pct) + '%';
+  progressSub.textContent = sub || '—';
+}
+
+const STEP_DEFS = ['Secure channel (SCP)', 'Delete previous app', 'Create app slot', 'Upload code', 'Commit', 'List apps'];
+function renderSteps(activeIdx, states) {
+  stepsList.innerHTML = STEP_DEFS.map((label, i) => {
+    const st = states[i] || (i < activeIdx ? 'done' : i === activeIdx ? 'active' : '');
+    const time = stepTimes[i] != null ? ` <span style="color:var(--text-2);font-weight:400">(${(stepTimes[i] / 1000).toFixed(2)} s)</span>` : '';
+    return `<div class="step ${st}"><span class="step-dot"></span>${label}${time}</div>`;
+  }).join('');
+}
+let stepStates = new Array(STEP_DEFS.length).fill('');
+let stepTimes = new Array(STEP_DEFS.length).fill(null);
+function stepStart(i) { stepStates[i] = 'active'; renderSteps(i, stepStates); }
+function stepDone(i, ms) { stepStates[i] = 'done'; if (ms != null) stepTimes[i] = Math.round(ms); renderSteps(i, stepStates); }
+function stepError(i) { stepStates[i] = 'error'; renderSteps(i, stepStates); }
+renderSteps(-1, stepStates);
+
+targetIdSel.addEventListener('change', () => {
+  targetIdCustom.style.display = targetIdSel.value === 'custom' ? 'block' : 'none';
+});
+function getTargetId() {
+  const raw = targetIdSel.value === 'custom' ? targetIdCustom.value.trim() : targetIdSel.value;
+  const n = raw.startsWith('0x') || raw.startsWith('0X') ? parseInt(raw, 16) : parseInt(raw, 10);
+  if (!Number.isFinite(n)) throw new Error('Invalid target ID');
+  return n >>> 0;
+}
+
+const codeSizeInput = document.getElementById('codeSize');
+const CODE_SIZE_STEP = 512;
+codeSizeInput.addEventListener('change', () => {
+  const raw = parseInt(codeSizeInput.value, 10);
+  if (!Number.isFinite(raw)) return;
+  const min = parseInt(codeSizeInput.min, 10) || 0;
+  const max = parseInt(codeSizeInput.max, 10) || Infinity;
+  const clamped = Math.min(Math.max(raw, min), max);
+  const rounded = Math.ceil(clamped / CODE_SIZE_STEP) * CODE_SIZE_STEP;
+  if (rounded !== raw) {
+    codeSizeInput.value = rounded;
+    log('info', `Fake code size adjusted to ${rounded.toLocaleString()} bytes (rounded up to a multiple of ${CODE_SIZE_STEP})`);
+  }
+});
+
+connectBtn.addEventListener('click', async () => {
+  if (!navigator.usb) { log('err', 'WebUSB not available (Chrome/Edge required, HTTPS or localhost)'); return; }
+  try {
+    log('info', 'Selecting device…');
+    device = await navigator.usb.requestDevice({ filters: [{ vendorId: 0x2C97 }] });
+    const t0 = performance.now();
+    await device.open();
+    if (!device.configuration) await device.selectConfiguration(1);
+    const info = findIface(device);
+    if (!info) { log('err', 'WebUSB interface (EP3) not found'); await device.close(); device = null; return; }
+    try { await device.claimInterface(info.interfaceNumber); }
+    catch (e) { log('err', `claimInterface: ${e.message}`); await device.close(); device = null; return; }
+    iface = info; epIn = info.epIn; epOut = info.epOut;
+    const setupMs = performance.now() - t0;
+    statusDot.className = 'dot connected';
+    statusText.textContent = device.productName || 'Connected';
+    runBtn.disabled = false; runNote.textContent = 'Fill in the fields, then Load app';
+    disconnectBtn.style.display = 'flex';
+    deviceContent.innerHTML = `
+      <div class="kv-list">
+        <div class="kv"><span class="kv-key">Product</span><span class="kv-val">${device.productName || '—'}</span></div>
+        <div class="kv"><span class="kv-key">VID/PID</span><span class="kv-val">0x${device.vendorId.toString(16).padStart(4, '0').toUpperCase()} / 0x${device.productId.toString(16).padStart(4, '0').toUpperCase()}</span></div>
+        <div class="kv"><span class="kv-key">Interface</span><span class="kv-val">#${info.interfaceNumber}</span></div>
+        <div class="kv"><span class="kv-key">Model</span><span class="kv-val" id="kvModel">—</span></div>
+        <div class="kv"><span class="kv-key">Firmware</span><span class="kv-val" id="kvFirmware">—</span></div>
+      </div>`;
+    log('ok', `Connected in ${(setupMs / 1000).toFixed(2)} s — interface #${info.interfaceNumber}`);
+
+    try {
+      const versionData = await rawExchange([0xE0, 0x01, 0x00, 0x00, 0x00]);
+      const { targetId, osVersion } = parseGetVersion(versionData);
+      const model = TARGET_ID_MODEL[targetId] || null;
+      log('ok', `GET VERSION: targetId=0x${targetId.toString(16).padStart(8, '0')}${model ? ' (' + model + ')' : ''}, firmware ${osVersion}`);
+      document.getElementById('kvModel').textContent = model || `Unknown (0x${targetId.toString(16)})`;
+      document.getElementById('kvFirmware').textContent = osVersion;
+
+      let matched = false;
+      for (const opt of targetIdSel.options) {
+        if (opt.value === 'custom') continue;
+        if ((parseInt(opt.value, 16) >>> 0) === targetId) { targetIdSel.value = opt.value; matched = true; break; }
+      }
+      if (matched) {
+        targetIdCustom.style.display = 'none';
+      } else {
+        targetIdSel.value = 'custom';
+        targetIdCustom.style.display = 'block';
+        targetIdCustom.value = `0x${targetId.toString(16).padStart(8, '0')}`;
+      }
+
+      const { level: apiLevel, exact, matchedVersion } = resolveApiLevel(API_LEVELS, model, osVersion);
+      document.getElementById('apiLevel').value = apiLevel;
+      const detail = apiLevel === 0
+        ? ' (unknown mapping, defaulted to 0)'
+        : exact ? '' : ` (inferred from ${matchedVersion}, no exact entry for ${model}_${osVersion})`;
+      log(apiLevel ? 'ok' : 'warn', `Resolved API level: ${apiLevel}${detail}`);
+    } catch (e) {
+      log('warn', `GET VERSION failed: ${e.message}`);
+    }
+  } catch (e) {
+    if (e.name !== 'NotFoundError') log('err', e.message);
+  }
+});
+
+disconnectBtn.addEventListener('click', async () => {
+  if (!device) return;
+  try { if (iface) await device.releaseInterface(iface.interfaceNumber); await device.close(); } catch (_) {}
+  device = null; iface = null;
+  statusDot.className = 'dot'; statusText.textContent = 'Disconnected';
+  runBtn.disabled = true; runNote.textContent = 'Connect a device first';
+  disconnectBtn.style.display = 'none';
+  deviceContent.innerHTML = `<div style="text-align:center;padding:12px 0 8px;color:var(--text-2);font-size:12px">No device connected</div>
+    <button class="btn btn-primary" id="connectBtn2">Connect</button>`;
+  document.getElementById('connectBtn2').addEventListener('click', () => connectBtn.click());
+  log('info', 'Disconnected');
+});
+
+function generateFakeCode(n, mode) {
+  if (mode === 'random') return randomBytes(n);
+  if (mode === 'pattern') { const b = new Uint8Array(n); b.fill(0xA5); return b; }
+  return new Uint8Array(n); // zero
+}
+
+const MAX_SEGMENT_SIZE = 0x10000; // loadSegmentChunk offset is u16be, so a single segment is capped at 64KB
+function buildSegmentedAreas(baseAddress, data, maxSize = MAX_SEGMENT_SIZE) {
+  const areas = [];
+  let offset = 0;
+  do {
+    const len = Math.min(maxSize, data.length - offset);
+    areas.push({ start: baseAddress + offset, data: data.subarray(offset, offset + len) });
+    offset += len;
+  } while (offset < data.length);
+  return areas;
+}
+
+let running = false;
+async function runLoadApp() {
+  if (!device || running) return;
+  running = true;
+  capturedApdus = [];
+  downloadApduBtn.style.display = 'none';
+  const tStart = performance.now();
+  stepStates = new Array(STEP_DEFS.length).fill('');
+  stepTimes = new Array(STEP_DEFS.length).fill(null);
+  const deleteFirst = document.getElementById('deleteFirst').checked;
+  const verifyAfter = document.getElementById('verifyAfter').checked;
+  if (!deleteFirst) stepStates[1] = 'skip';
+  if (!verifyAfter) stepStates[5] = 'skip';
+  renderSteps(-1, stepStates);
+  setProgress(0, 'Starting…', '—', '');
+
+  runBtn.className = 'btn btn-run running';
+  runBtn.innerHTML = `<svg width="10" height="10" viewBox="0 0 10 10" fill="none"><rect x="2" y="2" width="6" height="6" fill="white" rx="1"/></svg> Cancel is not supported — wait for completion`;
+  runBtn.disabled = true;
+
+  try {
+    const appName = document.getElementById('appName').value.trim();
+    if (!appName) throw new Error('App name is required');
+    const appNameBytes = strToBytes(appName);
+    const apiLevel = parseInt(document.getElementById('apiLevel').value, 10) || 0;
+    const targetId = getTargetId();
+    const codeSize = parseInt(document.getElementById('codeSize').value, 10) || 4096;
+    const fillMode = document.getElementById('fillMode').value;
+    const appVersion = document.getElementById('appVersion').value.trim();
+    const appFlags = parseInt(document.getElementById('appFlags').value, 10) || 0;
+
+    log('info', `Target 0x${targetId.toString(16)}, app "${appName}", apiLevel=${apiLevel}, code=${codeSize}B, fill=${fillMode}`);
+
+    stepStart(0);
+    const secretResult = await establishScp(rawExchange, targetId, log);
+    const loader = await Loader.create(rawExchange, 0xE0, secretResult);
+    log('ok', `Secure channel established (SCP v${loader.scpVersion})`);
+    stepDone(0);
+
+    if (deleteFirst) {
+      stepStart(1);
+      try {
+        await loader.deleteApp(appNameBytes);
+        log('ok', `Deleted existing app "${appName}" (if it existed)`);
+      } catch (e) {
+        log('warn', `Delete step: ${e.message}`);
+      }
+      stepDone(1);
+    }
+
+    const path = Uint8Array.from([0xFF]); // unrestricted curve mask, no BIP32/SLIP21 path lock
+    let installParams = encodeTLV(BOLOS_TAG_APPNAME, appNameBytes);
+    if (appVersion) installParams = concatBytes(installParams, encodeTLV(BOLOS_TAG_APPVERSION, strToBytes(appVersion)));
+    installParams = concatBytes(installParams, encodeTLV(BOLOS_TAG_DERIVEPATH, path));
+
+    const fakeCode = generateFakeCode(codeSize, fillMode);
+    const dataLength = 0;
+    const bootOffset = 1; // never actually run; arbitrary in-bounds offset
+
+    stepStart(2);
+    const t2 = performance.now();
+    await loader.createApp(codeSize, apiLevel, dataLength, installParams.length, appFlags, bootOffset);
+    const dt2 = performance.now() - t2;
+    log('ok', `App slot created (params=${installParams.length}B) in ${(dt2 / 1000).toFixed(2)} s`);
+    stepDone(2, dt2);
+
+    stepStart(3);
+    const t3 = performance.now();
+    setProgress(0, 'Uploading…', `0 / ${codeSize + installParams.length} bytes`, '');
+    const codeAreas = buildSegmentedAreas(0, fakeCode);
+    const areas = [
+      ...codeAreas,
+      { start: codeSize, data: installParams },
+    ];
+    if (codeAreas.length > 1) log('info', `Code split into ${codeAreas.length} segments of up to ${MAX_SEGMENT_SIZE.toLocaleString()} bytes each`);
+    await loader.load(areas, (sent, total) => {
+      const pct = (sent / total) * 100;
+      setProgress(pct, 'Uploading…', `${sent.toLocaleString()} / ${total.toLocaleString()} bytes`, '');
+    });
+    const dt3 = performance.now() - t3;
+    log('ok', `Code and install parameters uploaded in ${(dt3 / 1000).toFixed(2)} s using ${loader.loadApduCount} load APDUs`);
+    stepDone(3, dt3);
+
+    stepStart(4);
+    const t4 = performance.now();
+    await loader.commit(null);
+    const dt4 = performance.now() - t4;
+    log('ok', `App "${appName}" installed (unsigned — dev/custom-CA channel) in ${(dt4 / 1000).toFixed(2)} s`);
+    stepDone(4, dt4);
+    setProgress(100, 'Done', `${appName} installed`, 'done');
+
+    if (verifyAfter) {
+      stepStart(5);
+      const apps = await loader.listApp();
+      log('info', `Installed apps: ${apps.length ? apps.join(', ') : '(none reported)'}`);
+      if (apps.includes(appName)) log('ok', `Confirmed "${appName}" is listed on the device`);
+      else log('warn', `"${appName}" was not found in the app list response`);
+      stepDone(5);
+    }
+
+    const totalMs = performance.now() - tStart;
+    log('ok', `Total operation time: ${(totalMs / 1000).toFixed(2)} s`);
+    setProgress(100, 'Done', `${appName} installed in ${(totalMs / 1000).toFixed(2)} s`, 'done');
+  } catch (e) {
+    log('err', e.message);
+    const activeIdx = stepStates.findIndex(s => s === 'active');
+    if (activeIdx !== -1) stepError(activeIdx);
+    const totalMs = performance.now() - tStart;
+    log('err', `Failed after ${(totalMs / 1000).toFixed(2)} s`);
+    setProgress(0, 'Failed', e.message, 'error');
+  } finally {
+    running = false;
+    runBtn.className = 'btn btn-run';
+    runBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><polygon points="3,2 11,7 3,12" fill="white"/></svg> Load app`;
+    runBtn.disabled = !device;
+    downloadApduBtn.style.display = capturedApdus.length ? 'flex' : 'none';
+  }
+}
+
+function sanitizeFilename(s) {
+  return s.replace(/[^a-zA-Z0-9._-]+/g, '_') || 'app';
+}
+
+function buildApduFile(appName, targetId, apiLevel) {
+  const lines = [
+    `# app.apdu — raw APDUs exchanged while loading "${appName}"`,
+    `# target 0x${targetId.toString(16).padStart(8, '0')}, apiLevel ${apiLevel}`,
+    `# generated ${new Date().toISOString()}`,
+    '# NOTE: the SCP-wrapped APDUs below were encrypted with a one-time ephemeral',
+    '# session key and cannot be decrypted or replayed against a different session.',
+    '# This file is a record of what was sent, not a portable install script.',
+  ];
+  for (const apdu of capturedApdus) lines.push(bytesToHex(apdu));
+  return lines.join('\n') + '\n';
+}
+
+downloadApduBtn.addEventListener('click', () => {
+  if (!capturedApdus.length) return;
+  const appName = document.getElementById('appName').value.trim() || 'app';
+  let targetId = 0, apiLevel = 0;
+  try { targetId = getTargetId(); } catch (_) {}
+  try { apiLevel = parseInt(document.getElementById('apiLevel').value, 10) || 0; } catch (_) {}
+  const content = buildApduFile(appName, targetId, apiLevel);
+  const blob = new Blob([content], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${sanitizeFilename(appName)}.apdu`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  log('info', `Downloaded ${sanitizeFilename(appName)}.apdu (${capturedApdus.length} APDUs)`);
+});
+
+runBtn.addEventListener('click', runLoadApp);
+</script>
+</body>
+</html>
